@@ -41,7 +41,7 @@ import kotlinx.coroutines.delay
 import androidx.compose.material3.Icon
 import com.example.polimedapplication.data.BazaDateAjutor
 import java.text.SimpleDateFormat
-
+import android.util.Log
 import java.util.*
 /*
 import com.example.polimedapplication.ui.components.CustomDatePickerDialog
@@ -78,23 +78,20 @@ fun ProgramareMedicamentScreen(navController: NavController, idUtilizator: Strin
     var unitate by remember { mutableStateOf("") }
     var instructiuni by remember { mutableStateOf("") }
     var frecventa by remember { mutableStateOf("") }
-    var showFrecventaDropdown by remember { mutableStateOf(false) }
-
-    val optiuniFrecventa = listOf("De mai multe ori pe zi", "Zilnic", "Frecvență personalizată", "La nevoie")
 
     val scrollState = rememberScrollState()
     val showDatePickerStart = remember { mutableStateOf(false) }
     val showDatePickerEnd = remember { mutableStateOf(false) }
-    val datePickerStateStart = rememberDatePickerState()
-    val datePickerStateEnd = rememberDatePickerState()
+
     val dateInceput = remember { mutableStateOf("") }
     val dateFinal = remember { mutableStateOf("") }
 
-    var showTimePickerDialog by remember { mutableStateOf(false) }
-    var showTimePickerIndex by remember { mutableStateOf(-1) }
+
     var oraZilnica by remember { mutableStateOf("") }
     var oreAdministrare by remember { mutableStateOf(listOf<String>()) }
     val zileSelectate = remember { mutableStateMapOf<String, ZiPersonalizata>() }
+    val numarMaximAdministrari = remember { mutableStateOf("") }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -218,7 +215,6 @@ fun ProgramareMedicamentScreen(navController: NavController, idUtilizator: Strin
         Spacer(modifier = Modifier.height(16.dp))
         Text("Cât de des este administrat medicamentul?", fontFamily = fontSegoeUI)
 
-        var frecventa by remember { mutableStateOf("") }
 
 
         Spacer(modifier = Modifier.height(4.dp))
@@ -280,15 +276,12 @@ fun ProgramareMedicamentScreen(navController: NavController, idUtilizator: Strin
                 accentColor = AlbastruPoliMed
             )
 
-            var oraSelectata by remember { mutableStateOf("") }
-
 
             var nrAdministrari by remember { mutableStateOf("") }
             remember { mutableStateListOf<String>() }
 
             Spacer(modifier = Modifier.height(16.dp))
             Text("Administrare", fontFamily = fontSegoeUI)
-            var oreAdministrare by remember { mutableStateOf(listOf<String>()) }
             var indexTimePickerDeschis by remember { mutableStateOf(-1) }
 
             OutlinedTextField(
@@ -372,6 +365,7 @@ fun ProgramareMedicamentScreen(navController: NavController, idUtilizator: Strin
                         oreAdministrare = oreAdministrare.toMutableList().also {
                             it[indexTimePickerDeschis] = oraNoua
                         }
+                        Log.d("DEBUG_UI", "Ora setată la index $indexTimePickerDeschis: $oraNoua")
                         indexTimePickerDeschis = -1
                     },
                     onDismiss = { indexTimePickerDeschis = -1 },
@@ -433,7 +427,6 @@ fun ProgramareMedicamentScreen(navController: NavController, idUtilizator: Strin
             )
 
             // 👇 Selectarea unei singure ore
-            var oraZilnica by remember { mutableStateOf("") }
             var pickerZilnicDeschis by remember { mutableStateOf(false) }
             val AlbastruFundal = AlbastruPoliMed.copy(alpha = 0.1f)
 
@@ -553,7 +546,6 @@ fun ProgramareMedicamentScreen(navController: NavController, idUtilizator: Strin
             Text("Selectează zilele de administrare:", fontFamily = fontSegoeUI)
 
             val zileSaptamana = listOf("Luni", "Marți", "Miercuri", "Joi", "Vineri", "Sâmbătă", "Duminică")
-            val zileSelectate = remember { mutableStateMapOf<String, ZiPersonalizata>() }
             val ziDeschisa = remember { mutableStateOf<Pair<String, Int>?>(null) }
             val AlbastruFundal = AlbastruPoliMed.copy(alpha = 0.1f)
 
@@ -730,7 +722,6 @@ fun ProgramareMedicamentScreen(navController: NavController, idUtilizator: Strin
                 )
             }
 
-            val numarMaximAdministrari = remember { mutableStateOf("") }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -792,8 +783,28 @@ fun ProgramareMedicamentScreen(navController: NavController, idUtilizator: Strin
 
         Button(
             onClick = {
+                val numarMaximAdministrariFinal = if (frecventa == "La nevoie") {
+                    numarMaximAdministrari.value.toIntOrNull()
+                } else null
+
                 isSaving.value = true
                 isSaved.value = false
+                Log.d("DEBUG_DB", "Ore trimise: $oreAdministrare")
+                Log.d("DEBUG_DB", "Zile personalizate: $zileSelectate")
+                Log.d("DEBUG_UI", "Ore colectate pentru salvare: $oreAdministrare") // 🔍 AICI VEZI LISTA FINALĂ
+                val listaOreFinala = when (frecventa) {
+                    "Zilnic" -> listOf(oraZilnica)
+                    else -> oreAdministrare
+                }
+                Log.d("DEBUG_DB", "📋 zileSelectate finale: $zileSelectate")
+                Log.d("DEBUG_DB", "🎯 ore extrase: ${zileSelectate.mapValues { it.value.ore }}")
+                val zilePersonalizateFinal = zileSelectate.map { (zi, ziData) ->
+                    zi to ziData.ore.filter { it.isNotEmpty() }
+                }.toMap()
+
+                Log.d("DEBUG_UI", "📋 zileSelectate finale: $zileSelectate")
+                Log.d("DEBUG_UI", "🎯 zilePersonalizateFinal pentru salvare: $zilePersonalizateFinal")
+
                 salveazaMedicamentSiAdministrari(
                     context = context,
                     idUtilizator = idUtilizator,
@@ -806,8 +817,9 @@ fun ProgramareMedicamentScreen(navController: NavController, idUtilizator: Strin
                     alias = if (aliasActiv) aliasText else null,
                     dataInceput = dateInceput.value,
                     dataSfarsit = dateFinal.value,
-                    ore = oreAdministrare,
-                    zilePersonalizate = zileSelectate.mapValues { it.value.ore }
+                    ore = listaOreFinala,
+                    zilePersonalizate = zilePersonalizateFinal,
+                    numarMaximPeZi = numarMaximAdministrariFinal
                 )
 
 
@@ -955,8 +967,11 @@ fun salveazaMedicamentSiAdministrari(
     dataInceput: String,
     dataSfarsit: String,
     ore: List<String>,
-    zilePersonalizate: Map<String, List<String>> = emptyMap()
+    zilePersonalizate: Map<String, List<String>> = emptyMap(),
+    numarMaximPeZi: Int? = null
 ) {
+    Log.d("DEBUG_DB", "Ore primite pentru inserare: $ore")
+
     val db = BazaDateAjutor(context).writableDatabase
 
     // 🔍 Obține id-ul medicului
@@ -974,52 +989,102 @@ fun salveazaMedicamentSiAdministrari(
         put("instructiuni", instructiuni)
         put("dataIncepere", dataInceput)
         put("dataIncheiere", dataSfarsit)
+        put("numarMaximAdministrari", numarMaximPeZi)
     }
 
     val idMedicament = db.insert("Medicamente", null, values)
-
+    if (idMedicament == -1L) {
+        Log.e("DEBUG_DB", "❌ Inserare în tabelul Medicamente a eșuat")
+    }
     // === 2. Generăm administrările ===
     val format = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     val cal = Calendar.getInstance()
-    val start = format.parse(dataInceput)!!
-    val end = format.parse(dataSfarsit)!!
-    cal.time = start
 
-    while (!cal.time.after(end)) {
-        val dataStr = format.format(cal.time)
-        val ziua = SimpleDateFormat("EEEE", Locale("ro")).format(cal.time).replaceFirstChar { it.uppercase() }
+    try {
+        val start = format.parse(dataInceput)!!
+        val end = format.parse(dataSfarsit)!!
+        Log.d("DEBUG_DB", "🧪 Data start brut: $dataInceput | Data end brut: $dataSfarsit")
+        Log.d("DEBUG_DB", "🧪 Parsed start = $start | Parsed end = $end")
+        Log.d("DEBUG_DB", "🧠 Start parsed = $start | End parsed = $end")
+        cal.time = start
 
-        if (frecventa == "Zilnic" || frecventa == "De mai multe ori pe zi") {
-            ore.forEach { ora ->
-                inserareAdministrare(db, idMedicament, dataStr, ora, ziua)
+        while (!cal.time.after(end)) {
+            Log.d("DEBUG_DB", "⏳ Începem generarea administrărilor: $dataInceput - $dataSfarsit")
+
+            val dataStr = format.format(cal.time)
+            val ziua = normalizeZiua(
+                SimpleDateFormat("EEEE", Locale("ro")).format(cal.time)
+            )
+                .replaceFirstChar { it.uppercase() }
+            Log.d("DEBUG_DB", "📅 ziua actuală: $ziua | Chei disponibile: ${zilePersonalizate.keys}")
+            Log.d("DEBUG_DB", "➡️ nu am intrat in loop inca cu $frecventa" )
+
+            when (frecventa) {
+                "Zilnic", "De mai multe ori pe zi" -> {
+                    ore.forEach { ora ->
+                        inserareAdministrare(db, idMedicament, dataStr, ora, ziua)
+                    }
+                }
+
+                "Frecvență personalizată" -> {
+                    val oreZi = zilePersonalizate[ziua]
+                    oreZi?.forEach { ora ->
+                        inserareAdministrare(db, idMedicament, dataStr, ora, ziua)
+                    }
+                }
+
+                "La nevoie" -> {
+                    // 💡 Nu avem ora, doar ziua și data
+                    inserareAdministrare(db, idMedicament, dataStr, null.toString(), ziua)
+                    Log.d("DEBUG_DB", "🆘 Inserare la nevoie: $dataStr fără oră ($ziua)")
+                }
             }
-        } else if (frecventa == "Frecvență personalizată") {
-            val oreZi = zilePersonalizate[ziua]
-            oreZi?.forEach { ora ->
-                inserareAdministrare(db, idMedicament, dataStr, ora, ziua)
-            }
+
+
+            cal.add(Calendar.DAY_OF_MONTH, 1)
         }
-
-        cal.add(Calendar.DAY_OF_MONTH, 1)
+    } catch (e: Exception) {
+        Log.e("DEBUG_DB", "❌ EROARE PARSARE: ${e.message}")
+        e.printStackTrace()
     }
-
-
 
     db.close()
 }
+
 fun inserareAdministrare(
     db: SQLiteDatabase,
     idMedicament: Long,
     data: String,
-    ora: String,
+    ora: String?, // <-- poate fi null
     ziSaptamana: String
 ) {
-    println("✅ Inserare administrare: $data - $ora")
     val valori = ContentValues().apply {
         put("idMedicament", idMedicament)
         put("dataAdministrare", data)
-        put("oraAdministrare", ora)
         put("ziSaptamana", ziSaptamana)
+        if (!ora.isNullOrEmpty()) {
+            put("oraAdministrare", ora)
+        }
     }
-    db.insert("AdministrariMedicamente", null, valori)
+
+    val result = db.insert("AdministrariProgramate", null, valori)
+
+    if (result == -1L) {
+        Log.e("DEBUG_DB", "❌ EROARE la inserare administrare: $data - ${ora ?: "fără oră"}")
+    } else {
+        Log.d("DEBUG_DB", "✅ Inserare reușită: $data - ${ora ?: "fără oră"} (ID = $result)")
+    }
+}
+
+
+fun normalizeZiua(zi: String): String {
+    return zi.lowercase()
+        .replace("ă", "a")
+        .replace("â", "a")
+        .replace("î", "i")
+        .replace("ș", "s")
+        .replace("ş", "s")
+        .replace("ț", "t")
+        .replace("ţ", "t")
+        .replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
 }
